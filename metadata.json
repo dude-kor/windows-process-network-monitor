@@ -1,0 +1,6 @@
+{
+  "name": "WinNetMon - Zero-Install Windows Process Network Monitor",
+  "description": "Production-grade, zero-installation PowerShell network monitoring utility and interactive lab for Windows 10/11 tracking per-process sockets, bandwidth, and connection states.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
