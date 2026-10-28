@@ -1,34 +1,35 @@
-import React, { useState } from 'react';
-import { Copy, Check, Download, Search, FileCode, Shield, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Copy, Check, Download, Search, FileCode, CheckCircle2 } from 'lucide-react';
 import { POWERSHELL_SCRIPT_CODE } from '../scriptData';
+import { copyToClipboard } from '../utils/clipboard';
+import { downloadFile } from '../utils/download';
+import { APP_CONFIG } from '../config/constants';
 
 export const ScriptViewer: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const lines = POWERSHELL_SCRIPT_CODE.split('\n');
+  const lines = useMemo(() => POWERSHELL_SCRIPT_CODE.split('\n'), []);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(POWERSHELL_SCRIPT_CODE);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    const success = await copyToClipboard(POWERSHELL_SCRIPT_CODE);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleDownload = () => {
-    const blob = new Blob([POWERSHELL_SCRIPT_CODE], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Invoke-NetProcessMonitor.ps1';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadFile(POWERSHELL_SCRIPT_CODE, APP_CONFIG.scriptFileName);
   };
 
-  const filteredLines = searchQuery.trim()
-    ? lines.map((line, idx) => ({ line, originalIdx: idx + 1 })).filter(item => item.line.toLowerCase().includes(searchQuery.toLowerCase()))
-    : null;
+  const filteredLines = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return lines
+      .map((line, idx) => ({ line, originalIdx: idx + 1 }))
+      .filter(item => item.line.toLowerCase().includes(q));
+  }, [lines, searchQuery]);
 
   return (
     <div className="space-y-4">
@@ -41,7 +42,7 @@ export const ScriptViewer: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white font-mono">Invoke-NetProcessMonitor.ps1</h3>
+                <h3 className="text-base font-bold text-white font-mono">{APP_CONFIG.scriptFileName}</h3>
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">
                   Zero Dependencies (Inbox Native)
                 </span>
@@ -66,7 +67,7 @@ export const ScriptViewer: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold rounded-lg text-xs transition-colors cursor-pointer shadow-md shadow-cyan-950/40"
             >
               <Download className="w-4 h-4" />
-              <span>Download Invoke-NetProcessMonitor.ps1</span>
+              <span>Download {APP_CONFIG.scriptFileName}</span>
             </button>
           </div>
         </div>

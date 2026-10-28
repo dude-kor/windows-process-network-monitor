@@ -1,38 +1,36 @@
 import React, { useState } from 'react';
 import { 
-  Cpu, Network, ShieldAlert, ShieldCheck, Database, Layers,
-  Terminal, AlertCircle, FileText, CheckCircle2, ChevronRight,
-  Code2, Sparkles, Copy, Check
+  Cpu, Network, ShieldCheck, Database, Layers,
+  AlertCircle, Copy, Check
 } from 'lucide-react';
+import { 
+  ELEVATION_SNIPPET, 
+  PERF_COUNTER_COMPARE_SNIPPET, 
+  PRIVILEGE_MATRIX_ROWS 
+} from '../config/architectureData';
+import { copyToClipboard } from '../utils/clipboard';
+
+type SectionKey = 'sockets' | 'bandwidth' | 'dns' | 'privileges' | 'compat';
 
 export const ArchitectureGuide: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'sockets' | 'bandwidth' | 'dns' | 'privileges' | 'compat'>('sockets');
+  const [activeSection, setActiveSection] = useState<SectionKey>('sockets');
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedSnippet(id);
-    setTimeout(() => setCopiedSnippet(null), 2000);
+  const handleCopy = async (text: string, id: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopiedSnippet(id);
+      setTimeout(() => setCopiedSnippet(null), 2000);
+    }
   };
 
-  const elevationSnippet = `# Self-Elevation Wrapper for PowerShell Scripts
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[!] Elevating to Administrator..." -ForegroundColor Yellow
-    $argList = "-NoProfile -ExecutionPolicy Bypass -File \`"\$PSCommandPath\`" " + ($MyInvocation.UnboundArguments -join ' ')
-    Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs
-    exit
-}`;
-
-  const perfCounterCompareSnippet = `# Method A: High-Reliability PID-Anchored Kernel I/O Delta (Used in WinNetMon)
-# Directly reads EPROCESS->IO_COUNTERS with 0ms latency and no PerfMon index collision
-$proc = Get-Process -Id $PID
-$readDeltaBytes  = $proc.IOReadTransferCount  - $lastReadBytes
-$writeDeltaBytes = $proc.IOWriteTransferCount - $lastWriteBytes
-$kbPerSec = ($readDeltaBytes + $writeDeltaBytes) / 1024.0 / $elapsedSeconds
-
-# Method B: Windows Performance Counter (Fragile on multi-instance apps)
-# Issue: Windows names multiple processes as app#1, app#2. If one closes, index shifts!
-Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
+  const navTabs: Array<{ id: SectionKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { id: 'sockets', label: '1. Socket Mapping Engine', icon: Network },
+    { id: 'bandwidth', label: '2. Bandwidth & I/O Deltas', icon: Cpu },
+    { id: 'dns', label: '3. Reverse DNS & Caching', icon: Database },
+    { id: 'privileges', label: '4. Privilege Matrix & UAC', icon: ShieldCheck },
+    { id: 'compat', label: '5. PS 5.1 vs PS 7 Compatibility', icon: Layers },
+  ];
 
   return (
     <div className="space-y-6">
@@ -54,19 +52,13 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
 
         {/* Section Navigation Tabs */}
         <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-slate-800 text-xs">
-          {[
-            { id: 'sockets', label: '1. Socket Mapping Engine', icon: Network },
-            { id: 'bandwidth', label: '2. Bandwidth & I/O Deltas', icon: Cpu },
-            { id: 'dns', label: '3. Reverse DNS & Caching', icon: Database },
-            { id: 'privileges', label: '4. Privilege Matrix & UAC', icon: ShieldCheck },
-            { id: 'compat', label: '5. PS 5.1 vs PS 7 Compatibility', icon: Layers },
-          ].map(tab => {
+          {navTabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeSection === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveSection(tab.id as any)}
+                onClick={() => setActiveSection(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
                   isActive
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
@@ -144,13 +136,13 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
           </div>
 
           <p>
-            Windows administrators often reach for <code className="text-slate-200">Get-Counter '\Process(name)\IO Read Bytes/sec'</code>. However, in production Windows environments, Windows Performance Counters have a critical architectural flaw:
+            Windows administrators often reach for <code className="text-slate-200">Get-Counter &apos;\Process(name)\IO Read Bytes/sec&apos;</code>. However, in production Windows environments, Windows Performance Counters have a critical architectural flaw:
           </p>
 
           <div className="bg-rose-950/20 border border-rose-800/40 p-4 rounded-xl space-y-2">
             <div className="flex items-center gap-2 text-rose-300 font-semibold">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              The Performance Counter "Instance Index Collision" Flaw
+              The Performance Counter &quot;Instance Index Collision&quot; Flaw
             </div>
             <p className="text-slate-300 text-[11px]">
               When an application spawns multiple processes (e.g. Chrome, Teams, Edge, Node worker pools), Windows names them <code className="text-rose-200 font-mono">chrome</code>, <code className="text-rose-200 font-mono">chrome#1</code>, <code className="text-rose-200 font-mono">chrome#2</code>. If process #1 terminates, the remaining instances instantly shift indexes. Querying PerfMon counters by name causes index desynchronization, stale readings, and crashes.
@@ -161,7 +153,7 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">WinNetMon&apos;s Solution: Kernel IO_COUNTERS Delta Calculation</span>
               <button
-                onClick={() => handleCopy(perfCounterCompareSnippet, 'perf')}
+                onClick={() => handleCopy(PERF_COUNTER_COMPARE_SNIPPET, 'perf')}
                 className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer"
               >
                 {copiedSnippet === 'perf' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -169,7 +161,7 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
               </button>
             </div>
             <pre className="p-3 bg-slate-950 border border-slate-800 rounded-lg font-mono text-[11px] text-cyan-200 overflow-x-auto">
-              {perfCounterCompareSnippet}
+              {PERF_COUNTER_COMPARE_SNIPPET}
             </pre>
           </div>
 
@@ -241,31 +233,13 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                <tr>
-                  <td className="p-3 text-slate-300">Monitor User Application Processes (e.g., Chrome, Slack, Teams, Custom App)</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported (100%)</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported (100%)</td>
-                </tr>
-                <tr>
-                  <td className="p-3 text-slate-300">Monitor System Services (NT AUTHORITY\SYSTEM, svchost, spoolsv)</td>
-                  <td className="p-3 text-rose-400 font-semibold">Restricted (Returns no sockets)</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Full Visibility</td>
-                </tr>
-                <tr>
-                  <td className="p-3 text-slate-300">Read Process I/O Transfer Counters</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported for User Processes</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported for All Processes</td>
-                </tr>
-                <tr>
-                  <td className="p-3 text-slate-300">Reverse DNS Lookups</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported</td>
-                </tr>
-                <tr>
-                  <td className="p-3 text-slate-300">Save CSV Telemetry Log</td>
-                  <td className="p-3 text-yellow-300">Supported in User Directories (Desktop, Documents, %TEMP%)</td>
-                  <td className="p-3 text-emerald-400 font-semibold">Supported Anywhere (e.g. C:\Logs, ProgramData)</td>
-                </tr>
+                {PRIVILEGE_MATRIX_ROWS.map((row) => (
+                  <tr key={row.capability}>
+                    <td className="p-3 text-slate-300">{row.capability}</td>
+                    <td className={`p-3 ${row.standardClass}`}>{row.standardUser}</td>
+                    <td className={`p-3 ${row.adminClass}`}>{row.administrator}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -274,7 +248,7 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">Self-Elevation Snippet (Can be prepended if Administrator is strictly required):</span>
               <button
-                onClick={() => handleCopy(elevationSnippet, 'elev')}
+                onClick={() => handleCopy(ELEVATION_SNIPPET, 'elev')}
                 className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer"
               >
                 {copiedSnippet === 'elev' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -282,7 +256,7 @@ Get-Counter "\\Process(target_app)\\IO Data Bytes/sec"`;
               </button>
             </div>
             <pre className="p-3 bg-slate-950 border border-slate-800 rounded-lg font-mono text-[11px] text-emerald-300 overflow-x-auto">
-              {elevationSnippet}
+              {ELEVATION_SNIPPET}
             </pre>
           </div>
         </div>

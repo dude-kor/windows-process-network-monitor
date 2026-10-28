@@ -1,19 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Copy, Check, Terminal, Shield, Play, Sliders } from 'lucide-react';
+import { CommandBuilderOptions } from '../types';
+import { generateCliCommands } from '../core/commandGenerator';
+import { copyToClipboard } from '../utils/clipboard';
 
-interface CommandBuilderProps {
-  onUpdateConfig?: (config: {
-    processName: string;
-    pid?: number;
-    intervalSec: number;
-    includeUDP: boolean;
-    resolveDNS: boolean;
-    logPath: string;
-    continuousLogOnly: boolean;
-  }) => void;
-}
-
-export const CommandBuilder: React.FC<CommandBuilderProps> = () => {
+export const CommandBuilder: React.FC = () => {
   const [mode, setMode] = useState<'ByName' | 'ByPID'>('ByName');
   const [processName, setProcessName] = useState('target_app.exe');
   const [pidValue, setPidValue] = useState('4820');
@@ -27,45 +18,31 @@ export const CommandBuilder: React.FC<CommandBuilderProps> = () => {
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const handleCopy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+  const handleCopy = async (text: string, key: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    }
   };
 
-  // Build arguments
-  const args: string[] = [];
-  if (mode === 'ByName') {
-    args.push(`-ProcessName "${processName.trim()}"`);
-  } else {
-    args.push(`-PID ${pidValue.trim() || '1'}`);
-  }
+  const builderOptions: CommandBuilderOptions = useMemo(() => ({
+    mode,
+    processName,
+    pidValue,
+    interval,
+    includeUDP,
+    resolveDNS,
+    enableLogging,
+    logPath,
+    continuousLogOnly,
+    useBypassPolicy,
+  }), [mode, processName, pidValue, interval, includeUDP, resolveDNS, enableLogging, logPath, continuousLogOnly, useBypassPolicy]);
 
-  if (interval !== 1.0) {
-    args.push(`-IntervalSec ${interval}`);
-  }
-  if (includeUDP) {
-    args.push('-IncludeUDP');
-  }
-  if (resolveDNS) {
-    args.push('-ResolveDNS');
-  }
-  if (enableLogging && logPath.trim()) {
-    args.push(`-LogPath "${logPath.trim()}"`);
-  }
-  if (continuousLogOnly) {
-    args.push('-ContinuousLogOnly');
-  }
-
-  const rawScriptInvocation = `.\\Invoke-NetProcessMonitor.ps1 ${args.join(' ')}`;
-
-  const cliStandard = useBypassPolicy
-    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\Invoke-NetProcessMonitor.ps1 ${args.join(' ')}`
-    : rawScriptInvocation;
-
-  const cliElevated = `Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \\"\`$PWD\\Invoke-NetProcessMonitor.ps1\\" ${args.join(' ')}"`;
-
-  const cliPwshCore = `pwsh -NoProfile -File .\\Invoke-NetProcessMonitor.ps1 ${args.join(' ')}`;
+  const { cliStandard, cliElevated, cliPwshCore } = useMemo(
+    () => generateCliCommands(builderOptions),
+    [builderOptions]
+  );
 
   return (
     <div className="space-y-6">
