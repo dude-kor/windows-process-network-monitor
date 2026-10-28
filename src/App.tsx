@@ -20,9 +20,9 @@ export default function App() {
     `"07:18:22.105","4820","target_app.exe","UDP","192.168.1.145","5353","*","*","Listening","-"`
   ]);
 
-  const handleAppendCsvRow = (row: string) => {
+  const handleAppendCsvRow = React.useCallback((row: string) => {
     setCsvRows(prev => [row, ...prev.slice(0, 199)]);
-  };
+  }, []);
 
   const handleClearCsv = () => {
     setCsvRows([]);

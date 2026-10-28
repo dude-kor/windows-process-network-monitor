@@ -36,9 +36,16 @@ export const TerminalSimulator: React.FC<TerminalSimulatorProps> = ({
 
   const preset = PROCESS_PRESETS[selectedPresetIndex];
 
+  const activeSocketsRef = useRef<SocketConnection[]>([]);
+  const onAppendCsvRowRef = useRef(onAppendCsvRow);
+  onAppendCsvRowRef.current = onAppendCsvRow;
+  const isLogActiveRef = useRef(isLogActive);
+  isLogActiveRef.current = isLogActive;
+
   // Initialize and update sockets whenever preset changes
   useEffect(() => {
     if (!isProcessRunning) {
+      activeSocketsRef.current = [];
       setActiveSockets([]);
       return;
     }
@@ -58,6 +65,7 @@ export const TerminalSimulator: React.FC<TerminalSimulatorProps> = ({
         remoteHost: resolveDNS ? s.remoteHost : '-'
       }));
 
+    activeSocketsRef.current = initial;
     setActiveSockets(initial);
     setReadSpeed(preset.baseReadKBps);
     setWriteSpeed(preset.baseWriteKBps);
@@ -83,63 +91,62 @@ export const TerminalSimulator: React.FC<TerminalSimulatorProps> = ({
       setReadSpeed(parseFloat(newRead.toFixed(1)));
       setWriteSpeed(parseFloat(newWrite.toFixed(1)));
 
-      // Add occasional transient sockets or update timestamps
-      setActiveSockets(current => {
-        const timeNow = new Date().toTimeString().split(' ')[0] + '.' + Math.floor(Math.random() * 900 + 100);
-        
-        let updated = current.map(sock => {
-          // Occasionally cycle TimeWait into Established or vice-versa
-          let st = sock.state;
-          if (sock.protocol === 'TCP' && sock.state !== 'Listen') {
-            if (Math.random() < 0.08) {
-              st = sock.state === 'Established' ? 'TimeWait' : 'Established';
-            }
+      const timeNow = new Date().toTimeString().split(' ')[0] + '.' + Math.floor(Math.random() * 900 + 100);
+      const current = activeSocketsRef.current;
+
+      const updated = current.map(sock => {
+        // Occasionally cycle TimeWait into Established or vice-versa
+        let st = sock.state;
+        if (sock.protocol === 'TCP' && sock.state !== 'Listen') {
+          if (Math.random() < 0.08) {
+            st = sock.state === 'Established' ? 'TimeWait' : 'Established';
           }
-          return {
-            ...sock,
-            time: timeNow,
-            state: st,
-            remoteHost: resolveDNS ? (sock.remoteHost !== '-' ? sock.remoteHost : 'cdn.edge.net') : '-'
-          };
-        });
-
-        // If burst is active, inject dynamic short-lived connections
-        if (trafficBurst && updated.length < 12) {
-          const dynamicPort = Math.floor(50000 + Math.random() * 10000);
-          const endpoints = [
-            { ip: '13.107.42.16', host: 'identity.microsoft.com', proto: 'TCP' as const },
-            { ip: '172.217.16.206', host: 'play.googleapis.com', proto: 'TCP' as const },
-            { ip: '1.1.1.1', host: 'one.one.one.one', proto: 'TCP' as const },
-          ];
-          const choice = endpoints[Math.floor(Math.random() * endpoints.length)];
-          updated.push({
-            id: `transient-${dynamicPort}-${Date.now()}`,
-            time: timeNow,
-            pid: preset.pids[0],
-            protocol: choice.proto,
-            localAddress: '192.168.1.145',
-            localPort: dynamicPort,
-            remoteAddress: choice.ip,
-            remotePort: 443,
-            state: 'Established',
-            remoteHost: resolveDNS ? choice.host : '-'
-          });
         }
-
-        // CSV appending simulation
-        if (isLogActive && onAppendCsvRow && updated.length > 0) {
-          const sample = updated[Math.floor(Math.random() * updated.length)];
-          const csvLine = `"${sample.time}","${sample.pid}","${preset.name}","${sample.protocol}","${sample.localAddress}","${sample.localPort}","${sample.remoteAddress}","${sample.remotePort}","${sample.state}","${sample.remoteHost}"`;
-          onAppendCsvRow(csvLine);
-        }
-
-        return updated;
+        return {
+          ...sock,
+          time: timeNow,
+          state: st,
+          remoteHost: resolveDNS ? (sock.remoteHost !== '-' ? sock.remoteHost : 'cdn.edge.net') : '-'
+        };
       });
+
+      // If burst is active, inject dynamic short-lived connections
+      if (trafficBurst && updated.length < 12) {
+        const dynamicPort = Math.floor(50000 + Math.random() * 10000);
+        const endpoints = [
+          { ip: '13.107.42.16', host: 'identity.microsoft.com', proto: 'TCP' as const },
+          { ip: '172.217.16.206', host: 'play.googleapis.com', proto: 'TCP' as const },
+          { ip: '1.1.1.1', host: 'one.one.one.one', proto: 'TCP' as const },
+        ];
+        const choice = endpoints[Math.floor(Math.random() * endpoints.length)];
+        updated.push({
+          id: `transient-${dynamicPort}-${Date.now()}`,
+          time: timeNow,
+          pid: preset.pids[0],
+          protocol: choice.proto,
+          localAddress: '192.168.1.145',
+          localPort: dynamicPort,
+          remoteAddress: choice.ip,
+          remotePort: 443,
+          state: 'Established',
+          remoteHost: resolveDNS ? choice.host : '-'
+        });
+      }
+
+      activeSocketsRef.current = updated;
+      setActiveSockets(updated);
+
+      // CSV appending simulation executed cleanly outside the state updater
+      if (isLogActiveRef.current && onAppendCsvRowRef.current && updated.length > 0) {
+        const sample = updated[Math.floor(Math.random() * updated.length)];
+        const csvLine = `"${sample.time}","${sample.pid}","${preset.name}","${sample.protocol}","${sample.localAddress}","${sample.localPort}","${sample.remoteAddress}","${sample.remotePort}","${sample.state}","${sample.remoteHost}"`;
+        onAppendCsvRowRef.current(csvLine);
+      }
 
     }, Math.max(300, intervalSec * 1000));
 
     return () => clearInterval(timer);
-  }, [isPaused, isProcessRunning, intervalSec, trafficBurst, preset, resolveDNS, isLogActive, onAppendCsvRow]);
+  }, [isPaused, isProcessRunning, intervalSec, trafficBurst, preset, resolveDNS]);
 
   const handleSimulateCrash = () => {
     setIsProcessRunning(false);
