@@ -75,6 +75,7 @@ export const Layout: React.FC<LayoutProps> = ({
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onCopyScript}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
             >
@@ -83,6 +84,7 @@ export const Layout: React.FC<LayoutProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onDownloadScript}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-slate-950 transition-colors cursor-pointer shadow-md shadow-cyan-950/40"
             >
@@ -100,6 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({
               const isActive = activeTab === tab.id;
               return (
                 <button
+                  type="button"
                   key={tab.id}
                   onClick={() => onSelectTab(tab.id)}
                   className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -149,3 +152,5 @@ export const Layout: React.FC<LayoutProps> = ({
     </div>
   );
 };
+
+export default Layout;

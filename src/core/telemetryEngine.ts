@@ -1,12 +1,12 @@
 import { SocketConnection, ProcessProfile } from '../types/telemetry';
-import { getFormattedTimestamp } from '../utils/formatters';
-import { APP_CONFIG } from '../config/constants';
+import { getFormattedTimestamp } from '../utils';
+import { APP_CONFIG } from '../config';
 
 const TRANSIENT_ENDPOINTS = [
   { ip: '13.107.42.16', host: 'identity.microsoft.com', proto: 'TCP' as const },
   { ip: '172.217.16.206', host: 'play.googleapis.com', proto: 'TCP' as const },
   { ip: '1.1.1.1', host: 'one.one.one.one', proto: 'TCP' as const },
-];
+] as const;
 
 /**
  * Calculates simulated bandwidth read/write speeds based on process profiles, jitter, and bursts.
@@ -16,10 +16,13 @@ export function calculateSimulatedBandwidth(
   baseWriteKBps: number,
   trafficBurst: boolean
 ): { readSpeed: number; writeSpeed: number } {
+  const safeBaseRead = Number.isFinite(baseReadKBps) && baseReadKBps > 0 ? baseReadKBps : 10.0;
+  const safeBaseWrite = Number.isFinite(baseWriteKBps) && baseWriteKBps > 0 ? baseWriteKBps : 5.0;
+
   const burstMultiplier = trafficBurst ? APP_CONFIG.burstSpeedMultiplier : 1.0;
   const noise = Math.random() * 0.4 - 0.2;
-  const newRead = Math.max(0.2, baseReadKBps * (1 + noise) * burstMultiplier);
-  const newWrite = Math.max(0.1, baseWriteKBps * (1 + noise) * burstMultiplier);
+  const newRead = Math.max(0.2, safeBaseRead * (1 + noise) * burstMultiplier);
+  const newWrite = Math.max(0.1, safeBaseWrite * (1 + noise) * burstMultiplier);
 
   return {
     readSpeed: parseFloat(newRead.toFixed(1)),
@@ -28,7 +31,7 @@ export function calculateSimulatedBandwidth(
 }
 
 /**
- * Generates initial active socket list for a process preset.
+ * Generates initial active socket list for a process preset with defensive PID validation.
  */
 export function createInitialSockets(
   preset: ProcessProfile,
@@ -36,12 +39,18 @@ export function createInitialSockets(
   resolveDNS: boolean
 ): SocketConnection[] {
   const timeNow = getFormattedTimestamp();
-  return preset.defaultSockets
+  const availablePids = Array.isArray(preset.pids) && preset.pids.length > 0 
+    ? preset.pids 
+    : [4820];
+
+  const sockets = Array.isArray(preset.defaultSockets) ? preset.defaultSockets : [];
+
+  return sockets
     .filter(s => includeUDP || s.protocol === 'TCP')
     .map((s, idx) => ({
       id: `${s.protocol}-${s.localPort}-${idx}`,
       time: timeNow,
-      pid: preset.pids[idx % preset.pids.length],
+      pid: availablePids[idx % availablePids.length] ?? 4820,
       protocol: s.protocol,
       localAddress: s.state === 'Listen' ? '0.0.0.0' : '192.168.1.145',
       localPort: s.localPort,
@@ -62,6 +71,9 @@ export function evolveSockets(
   trafficBurst: boolean
 ): SocketConnection[] {
   const timeNow = getFormattedTimestamp();
+  const availablePids = Array.isArray(preset.pids) && preset.pids.length > 0 
+    ? preset.pids 
+    : [4820];
 
   const updated: SocketConnection[] = current.map(sock => {
     let nextState = sock.state;
@@ -80,11 +92,13 @@ export function evolveSockets(
 
   if (trafficBurst && updated.length < 12) {
     const dynamicPort = Math.floor(50000 + Math.random() * 10000);
-    const choice = TRANSIENT_ENDPOINTS[Math.floor(Math.random() * TRANSIENT_ENDPOINTS.length)];
+    const randomIndex = Math.floor(Math.random() * TRANSIENT_ENDPOINTS.length);
+    const choice = TRANSIENT_ENDPOINTS[randomIndex] ?? TRANSIENT_ENDPOINTS[0];
+
     updated.push({
       id: `transient-${dynamicPort}-${Date.now()}`,
       time: timeNow,
-      pid: preset.pids[0],
+      pid: availablePids[0] ?? 4820,
       protocol: choice.proto,
       localAddress: '192.168.1.145',
       localPort: dynamicPort,

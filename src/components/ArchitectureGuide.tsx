@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Cpu, Network, ShieldCheck, Database, Layers,
   AlertCircle, Copy, Check
@@ -7,7 +7,7 @@ import {
   ELEVATION_SNIPPET, 
   PERF_COUNTER_COMPARE_SNIPPET, 
   PRIVILEGE_MATRIX_ROWS 
-} from '../config/architectureData';
+} from '../config';
 import { copyToClipboard } from '../utils/clipboard';
 
 type SectionKey = 'sockets' | 'bandwidth' | 'dns' | 'privileges' | 'compat';
@@ -15,14 +15,35 @@ type SectionKey = 'sockets' | 'bandwidth' | 'dns' | 'privileges' | 'compat';
 export const ArchitectureGuide: React.FC = () => {
   const [activeSection, setActiveSection] = useState<SectionKey>('sockets');
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleCopy = async (text: string, id: string) => {
-    const success = await copyToClipboard(text);
-    if (success) {
-      setCopiedSnippet(id);
-      setTimeout(() => setCopiedSnippet(null), 2000);
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(async (text: string, id: string) => {
+    if (!text) {
+      return;
     }
-  };
+
+    const success = await copyToClipboard(text);
+    if (!success) {
+      return;
+    }
+
+    setCopiedSnippet(id);
+    if (copyTimeoutRef.current !== null) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopiedSnippet(null);
+      copyTimeoutRef.current = null;
+    }, 2000);
+  }, []);
 
   const navTabs: Array<{ id: SectionKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'sockets', label: '1. Socket Mapping Engine', icon: Network },
@@ -57,6 +78,7 @@ export const ArchitectureGuide: React.FC = () => {
             const isActive = activeSection === tab.id;
             return (
               <button
+                type="button"
                 key={tab.id}
                 onClick={() => setActiveSection(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
@@ -153,6 +175,7 @@ export const ArchitectureGuide: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">WinNetMon&apos;s Solution: Kernel IO_COUNTERS Delta Calculation</span>
               <button
+                type="button"
                 onClick={() => handleCopy(PERF_COUNTER_COMPARE_SNIPPET, 'perf')}
                 className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer"
               >
@@ -248,6 +271,7 @@ export const ArchitectureGuide: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="font-semibold text-white">Self-Elevation Snippet (Can be prepended if Administrator is strictly required):</span>
               <button
+                type="button"
                 onClick={() => handleCopy(ELEVATION_SNIPPET, 'elev')}
                 className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer"
               >
@@ -312,3 +336,5 @@ export const ArchitectureGuide: React.FC = () => {
     </div>
   );
 };
+
+export default ArchitectureGuide;

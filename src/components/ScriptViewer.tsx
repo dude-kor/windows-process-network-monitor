@@ -1,31 +1,49 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Copy, Check, Download, Search, FileCode, CheckCircle2 } from 'lucide-react';
 import { POWERSHELL_SCRIPT_CODE } from '../scriptData';
-import { copyToClipboard } from '../utils/clipboard';
-import { downloadFile } from '../utils/download';
-import { APP_CONFIG } from '../config/constants';
+import { copyToClipboard, downloadFile } from '../utils';
+import { APP_CONFIG } from '../config';
 
 export const ScriptViewer: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const lines = useMemo(() => POWERSHELL_SCRIPT_CODE.split('\n'), []);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     const success = await copyToClipboard(POWERSHELL_SCRIPT_CODE);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    if (!success) {
+      return;
     }
-  };
 
-  const handleDownload = () => {
+    setCopied(true);
+    if (copyTimeoutRef.current !== null) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copyTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const handleDownload = useCallback(() => {
     downloadFile(POWERSHELL_SCRIPT_CODE, APP_CONFIG.scriptFileName);
-  };
+  }, []);
 
   const filteredLines = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return null;
+    if (!q) {
+      return null;
+    }
     return lines
       .map((line, idx) => ({ line, originalIdx: idx + 1 }))
       .filter(item => item.line.toLowerCase().includes(q));
@@ -55,6 +73,7 @@ export const ScriptViewer: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCopy}
               className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors cursor-pointer shadow-sm"
             >
@@ -63,6 +82,7 @@ export const ScriptViewer: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={handleDownload}
               className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold rounded-lg text-xs transition-colors cursor-pointer shadow-md shadow-cyan-950/40"
             >
@@ -120,7 +140,7 @@ export const ScriptViewer: React.FC = () => {
                 <div className="text-slate-500 py-6 text-center">No lines matching &quot;{searchQuery}&quot;</div>
               ) : (
                 filteredLines.map((item) => (
-                  <div key={item.originalIdx} className="flex gap-4 hover:bg-slate-800/40 px-2 py-0.5 rounded">
+                  <div key={`filtered-${item.originalIdx}`} className="flex gap-4 hover:bg-slate-800/40 px-2 py-0.5 rounded">
                     <span className="w-10 text-right text-slate-600 select-none">{item.originalIdx}</span>
                     <span className="text-slate-200 whitespace-pre">{item.line}</span>
                   </div>
@@ -145,7 +165,7 @@ export const ScriptViewer: React.FC = () => {
                   }
 
                   return (
-                    <tr key={lineNum} className="hover:bg-slate-800/30">
+                    <tr key={`code-line-${lineNum}`} className="hover:bg-slate-800/30">
                       <td className="w-12 pr-4 text-right text-slate-600 select-none align-top">
                         {lineNum}
                       </td>
@@ -163,3 +183,5 @@ export const ScriptViewer: React.FC = () => {
     </div>
   );
 };
+
+export default ScriptViewer;

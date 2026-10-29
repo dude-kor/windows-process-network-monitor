@@ -1,6 +1,6 @@
 import React from 'react';
 import { SocketConnection } from '../../types/telemetry';
-import { formatRemoteEndpoint } from '../../utils/formatters';
+import { formatRemoteEndpoint } from '../../utils';
 
 interface SocketTableProps {
   sockets: SocketConnection[];
@@ -13,10 +13,12 @@ export const SocketTable: React.FC<SocketTableProps> = ({
   processName,
   resolveDNS,
 }) => {
-  if (sockets.length === 0) {
+  const safeProcessName = processName || 'target_app.exe';
+
+  if (!sockets || sockets.length === 0) {
     return (
       <div className="py-8 text-center text-amber-400/80">
-        <p>[i] No active network connections or sockets detected for {processName} at this moment.</p>
+        <p>[i] No active network connections or sockets detected for {safeProcessName} at this moment.</p>
         <p className="text-slate-500 text-xs mt-1">(Process is idle or waiting for outbound requests)</p>
       </div>
     );
@@ -42,13 +44,14 @@ export const SocketTable: React.FC<SocketTableProps> = ({
             const isListen = sock.state === 'Listen' || sock.state === 'Listening';
             const isWait = sock.state === 'TimeWait' || sock.state === 'CloseWait';
 
-            const stateBadgeClass = isEstablished
-              ? 'text-emerald-400 font-semibold'
-              : isListen
-              ? 'text-cyan-400'
-              : isWait
-              ? 'text-amber-400'
-              : 'text-slate-300';
+            let stateBadgeClass = 'text-slate-300';
+            if (isEstablished) {
+              stateBadgeClass = 'text-emerald-400 font-semibold';
+            } else if (isListen) {
+              stateBadgeClass = 'text-cyan-400';
+            } else if (isWait) {
+              stateBadgeClass = 'text-amber-400';
+            }
 
             const remoteDisplay = formatRemoteEndpoint(
               sock.remoteAddress,
@@ -80,7 +83,7 @@ export const SocketTable: React.FC<SocketTableProps> = ({
                   {sock.state}
                 </td>
                 <td className="py-1.5 text-cyan-300 font-semibold">
-                  {processName}
+                  {safeProcessName}
                 </td>
               </tr>
             );
@@ -90,3 +93,5 @@ export const SocketTable: React.FC<SocketTableProps> = ({
     </div>
   );
 };
+
+export default SocketTable;

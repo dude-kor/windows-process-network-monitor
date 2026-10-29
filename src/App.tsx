@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ActiveTab } from './types';
 import { TerminalSimulator } from './components/TerminalSimulator';
 import { ScriptViewer } from './components/ScriptViewer';
@@ -7,16 +7,28 @@ import { ArchitectureGuide } from './components/ArchitectureGuide';
 import { CsvTelemetryViewer } from './components/CsvTelemetryViewer';
 import { Layout } from './components/Layout';
 import { POWERSHELL_SCRIPT_CODE } from './scriptData';
-import { APP_CONFIG, INITIAL_CSV_ROWS } from './config/constants';
-import { copyToClipboard } from './utils/clipboard';
-import { downloadFile } from './utils/download';
+import { APP_CONFIG, INITIAL_CSV_ROWS } from './config';
+import { copyToClipboard, downloadFile } from './utils';
 
-export default function App() {
+export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('terminal');
   const [copiedScript, setCopiedScript] = useState(false);
   const [csvRows, setCsvRows] = useState<string[]>(INITIAL_CSV_ROWS);
 
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleAppendCsvRow = useCallback((row: string) => {
+    if (!row) {
+      return;
+    }
     setCsvRows(prev => [row, ...prev.slice(0, APP_CONFIG.maxCsvBufferLength - 1)]);
   }, []);
 
@@ -26,10 +38,18 @@ export default function App() {
 
   const handleCopyScript = useCallback(async () => {
     const success = await copyToClipboard(POWERSHELL_SCRIPT_CODE);
-    if (success) {
-      setCopiedScript(true);
-      setTimeout(() => setCopiedScript(false), 2000);
+    if (!success) {
+      return;
     }
+
+    setCopiedScript(true);
+    if (copyTimeoutRef.current !== null) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopiedScript(false);
+      copyTimeoutRef.current = null;
+    }, 2000);
   }, []);
 
   const handleDownloadScript = useCallback(() => {
@@ -69,3 +89,5 @@ export default function App() {
     </Layout>
   );
 }
+
+export default App;

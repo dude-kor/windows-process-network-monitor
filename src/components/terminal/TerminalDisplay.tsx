@@ -2,7 +2,7 @@ import React from 'react';
 import { Terminal, FileSpreadsheet } from 'lucide-react';
 import { SocketConnection, ProcessProfile } from '../../types/telemetry';
 import { SocketTable } from './SocketTable';
-import { formatSpeed } from '../../utils/formatters';
+import { formatSpeed } from '../../utils';
 
 interface TerminalDisplayProps {
   preset: ProcessProfile;
@@ -35,6 +35,9 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
   resolveDNS,
   onRestartProcess,
 }) => {
+  const safePids = Array.isArray(preset.pids) ? preset.pids : [];
+  const safeProcessName = preset.name || 'target_app.exe';
+
   const establishedCount = activeSockets.filter(s => s.state === 'Established').length;
   const listenCount = activeSockets.filter(s => s.state === 'Listen' || s.state === 'Listening').length;
   const timeWaitCount = activeSockets.filter(s => s.state === 'TimeWait').length;
@@ -75,7 +78,7 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
             <div className="text-yellow-400 leading-tight">
               ================================================================================<br />
               &nbsp;&nbsp;&nbsp;WinNetMon: Zero-Installation Windows Process Network Monitor<br />
-              &nbsp;&nbsp;&nbsp;Target: {preset.name} | Mode: {isAdmin ? 'Administrator' : 'Standard User'}<br />
+              &nbsp;&nbsp;&nbsp;Target: {safeProcessName} | Mode: {isAdmin ? 'Administrator' : 'Standard User'}<br />
               ================================================================================
             </div>
             <div className="text-rose-400 font-bold flex items-center gap-2">
@@ -89,7 +92,15 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
               [*] Press Ctrl+C at any time to exit cleanly.
             </div>
             <div className="pt-6 border-t border-slate-800/60 text-slate-600 text-xs">
-              Tip: Click <span className="text-cyan-400 font-semibold cursor-pointer underline" onClick={onRestartProcess}>"Relaunch Target Process"</span> above to simulate an application restart and see WinNetMon automatically re-anchor without error.
+              Tip: Click{' '}
+              <button
+                type="button"
+                className="text-cyan-400 font-semibold cursor-pointer underline bg-transparent border-0 p-0"
+                onClick={onRestartProcess}
+              >
+                &quot;Relaunch Target Process&quot;
+              </button>{' '}
+              above to simulate an application restart and see WinNetMon automatically re-anchor without error.
             </div>
           </div>
         ) : (
@@ -101,11 +112,11 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
               WinNetMon: Zero-Installation Windows Process Network Monitor v1.2
             </div>
             <div className="flex flex-wrap items-center gap-x-4 text-slate-100">
-              <span>Process: <strong className="text-white font-semibold">{preset.name}</strong></span>
+              <span>Process: <strong className="text-white font-semibold">{safeProcessName}</strong></span>
               <span className="text-slate-500">|</span>
-              <span>Instances: <strong className="text-cyan-300">{preset.pids.length}</strong></span>
+              <span>Instances: <strong className="text-cyan-300">{safePids.length}</strong></span>
               <span className="text-slate-500">|</span>
-              <span>PIDs: <span className="text-yellow-300 font-semibold">{preset.pids.join(', ')}</span></span>
+              <span>PIDs: <span className="text-yellow-300 font-semibold">{safePids.join(', ') || '-'}</span></span>
             </div>
             <div className="flex items-center gap-2">
               <span>Privilege:</span>
@@ -134,7 +145,7 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
 
             <SocketTable
               sockets={activeSockets}
-              processName={preset.name}
+              processName={safeProcessName}
               resolveDNS={resolveDNS}
             />
 
@@ -156,3 +167,5 @@ export const TerminalDisplay: React.FC<TerminalDisplayProps> = ({
     </div>
   );
 };
+
+export default TerminalDisplay;

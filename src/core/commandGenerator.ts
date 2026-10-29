@@ -1,22 +1,25 @@
 import { CommandBuilderOptions, GeneratedCommands } from '../types';
-import { APP_CONFIG } from '../config/constants';
+import { APP_CONFIG } from '../config';
 
 /**
- * Pure generator to transform CLI builder form options into execution commands.
+ * Pure generator to transform CLI builder form options into execution commands with defensive sanitization.
  */
 export function generateCliCommands(options: CommandBuilderOptions): GeneratedCommands {
   const args: string[] = [];
 
   if (options.mode === 'ByName') {
-    const pName = options.processName.trim() || 'target_app.exe';
+    const rawName = options.processName ?? '';
+    const pName = rawName.trim() || 'target_app.exe';
     args.push(`-ProcessName "${pName}"`);
   } else {
-    const pid = options.pidValue.trim() || '1';
+    const rawPid = options.pidValue ?? '';
+    const pid = rawPid.trim() || '1';
     args.push(`-PID ${pid}`);
   }
 
-  if (options.interval !== 1.0) {
-    args.push(`-IntervalSec ${options.interval}`);
+  const safeInterval = Number.isFinite(options.interval) ? options.interval : 1.0;
+  if (safeInterval !== 1.0) {
+    args.push(`-IntervalSec ${safeInterval.toFixed(1)}`);
   }
 
   if (options.includeUDP) {
@@ -27,8 +30,9 @@ export function generateCliCommands(options: CommandBuilderOptions): GeneratedCo
     args.push('-ResolveDNS');
   }
 
-  if (options.enableLogging && options.logPath.trim()) {
-    args.push(`-LogPath "${options.logPath.trim()}"`);
+  const rawLogPath = options.logPath ?? '';
+  if (options.enableLogging && rawLogPath.trim()) {
+    args.push(`-LogPath "${rawLogPath.trim()}"`);
   }
 
   if (options.continuousLogOnly) {
@@ -54,3 +58,5 @@ export function generateCliCommands(options: CommandBuilderOptions): GeneratedCo
     cliPwshCore
   };
 }
+
+export default generateCliCommands;

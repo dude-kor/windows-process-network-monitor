@@ -44,7 +44,6 @@ export const TerminalSimulator: React.FC<TerminalSimulatorProps> = ({
   return (
     <div className="space-y-4">
       <TerminalControls
-        preset={preset}
         selectedPresetIndex={selectedPresetIndex}
         onSelectPreset={setSelectedPresetIndex}
         isProcessRunning={isProcessRunning}
@@ -83,3 +82,5 @@ export const TerminalSimulator: React.FC<TerminalSimulatorProps> = ({
     </div>
   );
 };
+
+export default TerminalSimulator;

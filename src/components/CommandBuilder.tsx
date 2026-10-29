@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Copy, Check, Terminal, Shield, Play, Sliders } from 'lucide-react';
 import { CommandBuilderOptions } from '../types';
-import { generateCliCommands } from '../core/commandGenerator';
-import { copyToClipboard } from '../utils/clipboard';
+import { generateCliCommands } from '../core';
+import { copyToClipboard } from '../utils';
 
 export const CommandBuilder: React.FC = () => {
   const [mode, setMode] = useState<'ByName' | 'ByPID'>('ByName');
@@ -14,17 +14,38 @@ export const CommandBuilder: React.FC = () => {
   const [enableLogging, setEnableLogging] = useState(true);
   const [logPath, setLogPath] = useState('C:\\Logs\\target_app_net.csv');
   const [continuousLogOnly, setContinuousLogOnly] = useState(false);
-  const [useBypassPolicy] = useState(true);
+  const [useBypassPolicy, setUseBypassPolicy] = useState(true);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleCopy = async (text: string, key: string) => {
-    const success = await copyToClipboard(text);
-    if (success) {
-      setCopiedKey(key);
-      setTimeout(() => setCopiedKey(null), 2000);
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(async (text: string, key: string) => {
+    if (!text) {
+      return;
     }
-  };
+
+    const success = await copyToClipboard(text);
+    if (!success) {
+      return;
+    }
+
+    setCopiedKey(key);
+    if (copyTimeoutRef.current !== null) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopiedKey(null);
+      copyTimeoutRef.current = null;
+    }, 2000);
+  }, []);
 
   const builderOptions: CommandBuilderOptions = useMemo(() => ({
     mode,
@@ -43,6 +64,14 @@ export const CommandBuilder: React.FC = () => {
     () => generateCliCommands(builderOptions),
     [builderOptions]
   );
+
+  const handleIntervalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    if (Number.isNaN(val)) {
+      return;
+    }
+    setInterval(Math.max(0.2, Math.min(60.0, val)));
+  };
 
   return (
     <div className="space-y-6">
@@ -94,8 +123,9 @@ export const CommandBuilder: React.FC = () => {
 
             {mode === 'ByName' ? (
               <div>
-                <label className="text-slate-300 font-medium block mb-1">Target Process Name</label>
+                <label htmlFor="input-process-name" className="text-slate-300 font-medium block mb-1">Target Process Name</label>
                 <input
+                  id="input-process-name"
                   type="text"
                   value={processName}
                   onChange={(e) => setProcessName(e.target.value)}
@@ -106,8 +136,9 @@ export const CommandBuilder: React.FC = () => {
               </div>
             ) : (
               <div>
-                <label className="text-slate-300 font-medium block mb-1">Target Process ID (PID)</label>
+                <label htmlFor="input-pid-val" className="text-slate-300 font-medium block mb-1">Target Process ID (PID)</label>
                 <input
+                  id="input-pid-val"
                   type="number"
                   value={pidValue}
                   onChange={(e) => setPidValue(e.target.value)}
@@ -120,16 +151,17 @@ export const CommandBuilder: React.FC = () => {
             {/* Polling Interval */}
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-slate-300 font-medium">Sampling Interval (-IntervalSec)</label>
+                <label htmlFor="input-interval-range" className="text-slate-300 font-medium">Sampling Interval (-IntervalSec)</label>
                 <span className="text-cyan-400 font-mono font-semibold">{interval.toFixed(1)}s</span>
               </div>
               <input
+                id="input-interval-range"
                 type="range"
                 min="0.2"
                 max="10.0"
                 step="0.1"
                 value={interval}
-                onChange={(e) => setInterval(parseFloat(e.target.value))}
+                onChange={handleIntervalChange}
                 className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-slate-500 mt-1">
@@ -183,6 +215,19 @@ export const CommandBuilder: React.FC = () => {
                     <p className="text-[11px] text-slate-400">Headless streaming log mode. Avoids clearing the terminal screen; ideal for background tasks.</p>
                   </div>
                 </label>
+
+                <label className="flex items-start gap-2.5 p-2 bg-slate-950 border border-slate-800/80 rounded-lg cursor-pointer hover:border-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={useBypassPolicy}
+                    onChange={(e) => setUseBypassPolicy(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-700 text-cyan-500 focus:ring-0"
+                  />
+                  <div>
+                    <span className="font-semibold text-slate-200">-ExecutionPolicy Bypass</span>
+                    <p className="text-[11px] text-slate-400">Prepend bypass policy flag to bypass Windows script execution restrictions seamlessly.</p>
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -226,6 +271,7 @@ export const CommandBuilder: React.FC = () => {
               Direct Console Execution (Standard or Elevated Terminal)
             </span>
             <button
+              type="button"
               onClick={() => handleCopy(cliStandard, 'std')}
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors cursor-pointer"
             >
@@ -249,6 +295,7 @@ export const CommandBuilder: React.FC = () => {
               Launch in Elevated Administrator Window (UAC RunAs One-Liner)
             </span>
             <button
+              type="button"
               onClick={() => handleCopy(cliElevated, 'elevated')}
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors cursor-pointer"
             >
@@ -272,6 +319,7 @@ export const CommandBuilder: React.FC = () => {
               PowerShell 7+ (pwsh.exe) Modern Terminal Execution
             </span>
             <button
+              type="button"
               onClick={() => handleCopy(cliPwshCore, 'pwsh')}
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors cursor-pointer"
             >
@@ -287,3 +335,5 @@ export const CommandBuilder: React.FC = () => {
     </div>
   );
 };
+
+export default CommandBuilder;

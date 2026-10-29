@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { FileSpreadsheet, Download, Trash2, Copy, Check, Filter } from 'lucide-react';
-import { copyToClipboard } from '../utils/clipboard';
-import { downloadFile } from '../utils/download';
-import { APP_CONFIG } from '../config/constants';
+import { copyToClipboard, downloadFile } from '../utils';
+import { APP_CONFIG } from '../config';
 
 interface CsvTelemetryViewerProps {
   csvRows: string[];
@@ -18,24 +17,51 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
   const [copied, setCopied] = useState(false);
   const [filterState, setFilterState] = useState<string>('ALL');
 
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const allCsvText = useMemo(() => {
     return [APP_CONFIG.defaultCsvHeader, ...csvRows].join('\n');
   }, [csvRows]);
 
-  const handleCopy = async () => {
-    const success = await copyToClipboard(allCsvText);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleCopy = useCallback(async () => {
+    if (!allCsvText) {
+      return;
     }
-  };
 
-  const handleDownload = () => {
+    const success = await copyToClipboard(allCsvText);
+    if (!success) {
+      return;
+    }
+
+    setCopied(true);
+    if (copyTimeoutRef.current !== null) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copyTimeoutRef.current = null;
+    }, 2000);
+  }, [allCsvText]);
+
+  const handleDownload = useCallback(() => {
+    if (!allCsvText) {
+      return;
+    }
     downloadFile(allCsvText, 'ProcessNetworkTelemetry.csv', 'text/csv;charset=utf-8');
-  };
+  }, [allCsvText]);
 
   const filteredRows = useMemo(() => {
-    if (filterState === 'ALL') return csvRows;
+    if (filterState === 'ALL') {
+      return csvRows;
+    }
     return csvRows.filter(row => row.includes(`"${filterState}"`));
   }, [csvRows, filterState]);
 
@@ -63,6 +89,7 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCopy}
               disabled={csvRows.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors cursor-pointer"
@@ -72,6 +99,7 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={handleDownload}
               disabled={csvRows.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-lg shadow-emerald-950/40"
@@ -81,6 +109,7 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onClearRows}
               disabled={csvRows.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 text-rose-300 rounded-lg text-xs font-medium border border-rose-500/30 transition-colors cursor-pointer"
@@ -98,6 +127,7 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
             <span>Filter Socket State:</span>
             {['ALL', 'Established', 'Listen', 'TimeWait'].map((st) => (
               <button
+                type="button"
                 key={st}
                 onClick={() => setFilterState(st)}
                 className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer ${
@@ -134,7 +164,7 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
             </div>
           ) : (
             filteredRows.map((row, idx) => (
-              <div key={idx} className="hover:bg-slate-800/40 px-1 py-0.5 rounded select-all font-mono text-[11px] text-slate-300">
+              <div key={`row-${idx}-${row.slice(0, 16)}`} className="hover:bg-slate-800/40 px-1 py-0.5 rounded select-all font-mono text-[11px] text-slate-300">
                 {row}
               </div>
             ))
@@ -144,3 +174,5 @@ export const CsvTelemetryViewer: React.FC<CsvTelemetryViewerProps> = ({
     </div>
   );
 };
+
+export default CsvTelemetryViewer;

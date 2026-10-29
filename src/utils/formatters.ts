@@ -1,7 +1,10 @@
 /**
- * Formats speed in KB/s to 1 decimal place.
+ * Formats speed in KB/s to 1 decimal place with defensive NaN/null guards.
  */
-export function formatSpeed(kbps: number): string {
+export function formatSpeed(kbps: number | null | undefined): string {
+  if (kbps === null || kbps === undefined || !Number.isFinite(kbps) || kbps < 0) {
+    return '0.0 KB/s';
+  }
   return `${kbps.toFixed(1)} KB/s`;
 }
 
@@ -10,7 +13,7 @@ export function formatSpeed(kbps: number): string {
  */
 export function getFormattedTimestamp(): string {
   const now = new Date();
-  const timeStr = now.toTimeString().split(' ')[0];
+  const timeStr = now.toTimeString().split(' ')[0] ?? '00:00:00';
   const ms = Math.floor(Math.random() * 900 + 100);
   return `${timeStr}.${ms}`;
 }
@@ -24,10 +27,22 @@ export function formatRemoteEndpoint(
   host: string,
   resolveDNS: boolean
 ): string {
-  if (resolveDNS && host !== '-' && host !== address) {
-    return `${address}:${port} (${host})`;
+  const safeAddress = address || '0.0.0.0';
+  const safePort = port !== undefined && port !== null ? port : '*';
+
+  if (resolveDNS && host && host !== '-' && host !== safeAddress) {
+    return `${safeAddress}:${safePort} (${host})`;
   }
-  return `${address}:${port}`;
+  return `${safeAddress}:${safePort}`;
+}
+
+/**
+ * Helper to safely escape CSV field values against quotes and injection.
+ */
+function escapeCsvValue(val: string | number): string {
+  const str = String(val ?? '');
+  const escaped = str.replace(/"/g, '""');
+  return `"${escaped}"`;
 }
 
 /**
@@ -45,5 +60,16 @@ export function serializeSocketToCsv(
   state: string,
   remoteHost: string
 ): string {
-  return `"${time}","${pid}","${processName}","${protocol}","${localAddress}","${localPort}","${remoteAddress}","${remotePort}","${state}","${remoteHost}"`;
+  return [
+    escapeCsvValue(time),
+    escapeCsvValue(pid),
+    escapeCsvValue(processName),
+    escapeCsvValue(protocol),
+    escapeCsvValue(localAddress),
+    escapeCsvValue(localPort),
+    escapeCsvValue(remoteAddress),
+    escapeCsvValue(remotePort),
+    escapeCsvValue(state),
+    escapeCsvValue(remoteHost)
+  ].join(',');
 }

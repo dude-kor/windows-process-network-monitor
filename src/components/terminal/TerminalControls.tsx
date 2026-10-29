@@ -1,13 +1,11 @@
 import React from 'react';
 import { 
-  Play, Pause, RotateCcw, AlertTriangle, ShieldCheck, 
+  Play, Pause, AlertTriangle, ShieldCheck, 
   ShieldAlert, Activity, RefreshCw, Zap 
 } from 'lucide-react';
-import { ProcessProfile } from '../../types/telemetry';
-import { PROCESS_PRESETS } from '../../config/processPresets';
+import { PROCESS_PRESETS } from '../../config';
 
 interface TerminalControlsProps {
-  preset: ProcessProfile;
   selectedPresetIndex: number;
   onSelectPreset: (index: number) => void;
   isProcessRunning: boolean;
@@ -48,6 +46,22 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
   onRestartProcess,
   onTriggerBurst,
 }) => {
+  const handlePresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const parsed = Number(e.target.value);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed >= PROCESS_PRESETS.length) {
+      return;
+    }
+    onSelectPreset(parsed);
+  };
+
+  const handleIntervalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const parsed = parseFloat(e.target.value);
+    if (Number.isNaN(parsed)) {
+      return;
+    }
+    onChangeInterval(Math.max(0.2, Math.min(10.0, parsed)));
+  };
+
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-xl backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
@@ -72,6 +86,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
         <div className="flex items-center gap-2">
           {isProcessRunning ? (
             <button
+              type="button"
               onClick={onSimulateCrash}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-all cursor-pointer"
               title="Kill or stop the target application to test graceful recovery"
@@ -81,6 +96,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
             </button>
           ) : (
             <button
+              type="button"
               onClick={onRestartProcess}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-all cursor-pointer shadow-lg shadow-emerald-950/50"
             >
@@ -90,6 +106,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
           )}
 
           <button
+            type="button"
             onClick={onTriggerBurst}
             disabled={!isProcessRunning || trafficBurst}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -104,6 +121,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={onTogglePause}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
           >
@@ -116,10 +134,13 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
       {/* Adjustments Form Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 text-xs">
         <div>
-          <label className="text-slate-400 font-medium block mb-1">Target Application Process</label>
+          <label htmlFor="target-process-select" className="text-slate-400 font-medium block mb-1">
+            Target Application Process
+          </label>
           <select
+            id="target-process-select"
             value={selectedPresetIndex}
-            onChange={(e) => onSelectPreset(Number(e.target.value))}
+            onChange={handlePresetChange}
             className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono focus:border-cyan-500 focus:outline-none"
           >
             {PROCESS_PRESETS.map((p, idx) => (
@@ -133,6 +154,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
         <div>
           <label className="text-slate-400 font-medium block mb-1">Execution Security Token</label>
           <button
+            type="button"
             onClick={onToggleAdmin}
             className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
               isAdmin 
@@ -181,7 +203,7 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
             max="5.0"
             step="0.1"
             value={intervalSec}
-            onChange={(e) => onChangeInterval(parseFloat(e.target.value))}
+            onChange={handleIntervalChange}
             className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
           />
         </div>
@@ -196,3 +218,5 @@ export const TerminalControls: React.FC<TerminalControlsProps> = ({
     </div>
   );
 };
+
+export default TerminalControls;

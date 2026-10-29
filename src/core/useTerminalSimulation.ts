@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { SocketConnection } from '../types/telemetry';
-import { PROCESS_PRESETS } from '../config/processPresets';
-import { APP_CONFIG } from '../config/constants';
+import { PROCESS_PRESETS, APP_CONFIG } from '../config';
 import { 
   calculateSimulatedBandwidth, 
   createInitialSockets, 
   evolveSockets 
 } from './telemetryEngine';
-import { serializeSocketToCsv } from '../utils/formatters';
+import { serializeSocketToCsv } from '../utils';
 
 interface UseTerminalSimulationProps {
   onAppendCsvRow?: (row: string) => void;
@@ -29,12 +28,14 @@ export function useTerminalSimulation({
 
   const [readSpeed, setReadSpeed] = useState(24.5);
   const [writeSpeed, setWriteSpeed] = useState(12.8);
-  const [dnsCacheCount] = useState(14);
   const [iteration, setIteration] = useState(1);
   const [activeSockets, setActiveSockets] = useState<SocketConnection[]>([]);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
 
-  const preset = PROCESS_PRESETS[selectedPresetIndex];
+  // Safe fallback preset to guarantee non-null reference
+  const preset = PROCESS_PRESETS[selectedPresetIndex] ?? PROCESS_PRESETS[0];
+
+  const dnsCacheCount = resolveDNS ? Math.max(14, activeSockets.filter(s => s.remoteHost !== '-').length + 8) : 0;
 
   // Ref locks to avoid stale closures in setInterval and keep renders pure
   const activeSocketsRef = useRef<SocketConnection[]>([]);
@@ -43,7 +44,23 @@ export function useTerminalSimulation({
   const isLogActiveRef = useRef(isLogActive);
   isLogActiveRef.current = isLogActive;
 
-  // Initialize and update sockets whenever preset changes or filter toggles change
+  // Timer refs to guarantee cleanup and avoid memory leaks
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const burstTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timer references on unmount
+  useEffect(() => {
+    return () => {
+      if (bannerTimerRef.current !== null) {
+        clearTimeout(bannerTimerRef.current);
+      }
+      if (burstTimerRef.current !== null) {
+        clearTimeout(burstTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Initialize and update sockets whenever preset or filter toggles change
   useEffect(() => {
     if (!isProcessRunning) {
       activeSocketsRef.current = [];
@@ -60,7 +77,9 @@ export function useTerminalSimulation({
 
   // Main polling ticker
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused) {
+      return;
+    }
 
     const intervalMs = Math.max(300, intervalSec * 1000);
     const timer = setInterval(() => {
@@ -82,20 +101,23 @@ export function useTerminalSimulation({
 
       // Clean side effect outside of React state updater function
       if (isLogActiveRef.current && onAppendCsvRowRef.current && updated.length > 0) {
-        const sample = updated[Math.floor(Math.random() * updated.length)];
-        const csvLine = serializeSocketToCsv(
-          sample.time,
-          sample.pid,
-          preset.name,
-          sample.protocol,
-          sample.localAddress,
-          sample.localPort,
-          sample.remoteAddress,
-          sample.remotePort,
-          sample.state,
-          sample.remoteHost
-        );
-        onAppendCsvRowRef.current(csvLine);
+        const randomIndex = Math.floor(Math.random() * updated.length);
+        const sample = updated[randomIndex] ?? updated[0];
+        if (sample) {
+          const csvLine = serializeSocketToCsv(
+            sample.time,
+            sample.pid,
+            preset.name,
+            sample.protocol,
+            sample.localAddress,
+            sample.localPort,
+            sample.remoteAddress,
+            sample.remotePort,
+            sample.state,
+            sample.remoteHost
+          );
+          onAppendCsvRowRef.current(csvLine);
+        }
       }
     }, intervalMs);
 
@@ -105,21 +127,40 @@ export function useTerminalSimulation({
   const handleSimulateCrash = useCallback(() => {
     setIsProcessRunning(false);
     setBannerNotice('Process terminated externally by SIGKILL/TaskKill.');
-    setTimeout(() => setBannerNotice(null), APP_CONFIG.bannerTimeoutMs);
+
+    if (bannerTimerRef.current !== null) {
+      clearTimeout(bannerTimerRef.current);
+    }
+    bannerTimerRef.current = setTimeout(() => {
+      setBannerNotice(null);
+      bannerTimerRef.current = null;
+    }, APP_CONFIG.bannerTimeoutMs);
   }, []);
 
   const handleRestartProcess = useCallback(() => {
     setIsProcessRunning(true);
     setBannerNotice(`Process ${preset.name} launched. WinNetMon automatically re-anchored to PIDs.`);
-    setTimeout(() => setBannerNotice(null), APP_CONFIG.bannerTimeoutMs);
+
+    if (bannerTimerRef.current !== null) {
+      clearTimeout(bannerTimerRef.current);
+    }
+    bannerTimerRef.current = setTimeout(() => {
+      setBannerNotice(null);
+      bannerTimerRef.current = null;
+    }, APP_CONFIG.bannerTimeoutMs);
   }, [preset.name]);
 
   const handleTriggerBurst = useCallback(() => {
     setTrafficBurst(true);
     setBannerNotice('Simulating high-throughput network burst & new socket handshakes...');
-    setTimeout(() => {
+
+    if (burstTimerRef.current !== null) {
+      clearTimeout(burstTimerRef.current);
+    }
+    burstTimerRef.current = setTimeout(() => {
       setTrafficBurst(false);
       setBannerNotice(null);
+      burstTimerRef.current = null;
     }, APP_CONFIG.burstDurationMs);
   }, []);
 
@@ -158,3 +199,5 @@ export function useTerminalSimulation({
     handleTriggerBurst
   };
 }
+
+export default useTerminalSimulation;
